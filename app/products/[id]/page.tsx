@@ -4,6 +4,12 @@ import { Star, ArrowLeft } from "lucide-react";
 import { products } from "@/lib/products";
 import { notFound } from "next/navigation";
 
+export function generateStaticParams() {
+  return products.map((product) => ({
+    id: String(product.id),
+  }));
+}
+
 type ProductPageProps = {
   params: Promise<{
     id: string;
@@ -32,22 +38,19 @@ export default async function ProductPage({
   return (
     <main className="min-h-screen bg-[#f8f7f3]">
 
-      {/* Breadcrumb */}
+      {/* Back */}
       <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-10 lg:px-16">
-
         <Link
           href="/products"
-          className="flex w-fit items-center gap-2 text-sm text-gray-500 hover:text-black"
+          className="flex w-fit items-center gap-2 text-sm text-gray-500 transition hover:text-black"
         >
           <ArrowLeft size={16} />
           Back to products
         </Link>
-
       </div>
 
       {/* Product */}
       <section className="mx-auto max-w-[1400px] px-5 pb-20 sm:px-10 lg:px-16">
-
         <div className="grid gap-10 lg:grid-cols-2 lg:gap-20">
 
           {/* Image */}
@@ -67,7 +70,6 @@ export default async function ProductPage({
               sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-contain p-10 sm:p-20"
             />
-
           </div>
 
           {/* Details */}
@@ -81,12 +83,13 @@ export default async function ProductPage({
               {product.name}
             </h1>
 
+            {/* Rating */}
             <div className="mt-5 flex items-center gap-2">
-
               <div className="flex items-center gap-1">
                 <Star
                   size={15}
                   fill="currentColor"
+                  strokeWidth={1.5}
                 />
 
                 <span className="text-sm">
@@ -97,11 +100,10 @@ export default async function ProductPage({
               <span className="text-sm text-gray-400">
                 ({product.reviews} reviews)
               </span>
-
             </div>
 
-            <div className="mt-7 flex items-center gap-3">
-
+            {/* Price */}
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               <span className="text-2xl font-semibold">
                 ₹{product.price}
               </span>
@@ -113,30 +115,34 @@ export default async function ProductPage({
               <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
                 {discount}% OFF
               </span>
-
             </div>
 
             <div className="my-8 h-px bg-[#deddd6]" />
 
+            {/* Description */}
             <p className="text-sm leading-7 text-gray-600">
-              A thoughtfully selected Henry&apos;s Store
-              essential designed to fit seamlessly into your
-              everyday routine.
+              A thoughtfully selected Henry&apos;s Store essential
+              designed to fit seamlessly into your everyday routine.
             </p>
 
+            {/* Buttons */}
             <div className="mt-8">
-
-              <button className="w-full rounded-full bg-[#1d392d] py-4 text-sm font-medium text-white transition hover:bg-[#13281f]">
+              <button
+                type="button"
+                className="w-full rounded-full bg-[#1d392d] py-4 text-sm font-medium text-white transition hover:bg-[#13281f]"
+              >
                 Add to Bag
               </button>
 
-              <button className="mt-3 w-full rounded-full border border-[#1d392d] py-4 text-sm font-medium transition hover:bg-[#1d392d] hover:text-white">
+              <button
+                type="button"
+                className="mt-3 w-full rounded-full border border-[#1d392d] py-4 text-sm font-medium transition hover:bg-[#1d392d] hover:text-white"
+              >
                 Buy Now
               </button>
-
             </div>
 
-            {/* Product information */}
+            {/* Information */}
             <div className="mt-10 space-y-5 border-t border-[#deddd6] pt-6">
 
               <div>
@@ -170,13 +176,9 @@ export default async function ProductPage({
               </div>
 
             </div>
-
           </div>
-
         </div>
-
       </section>
-
     </main>
   );
 }
