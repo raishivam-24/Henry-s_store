@@ -1,29 +1,109 @@
+
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 import ProductCard from "./ProductCard";
-import { products } from "@/lib/products";
+import type { Product } from "@/lib/products";
 
 export default function ProductsPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [concern, setConcern] = useState("All");
   const [sort, setSort] = useState("featured");
   const [mobileFilters, setMobileFilters] = useState(false);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadProducts() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch("/api/products", {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to load products.");
+        }
+
+        const data = await response.json();
+
+        if (!data.success || !Array.isArray(data.products)) {
+          throw new Error("The products API returned an invalid response.");
+        }
+
+        const mappedProducts: Product[] = data.products
+          .filter(
+            (product: {
+              price: number | null;
+              _id: string;
+            }) =>
+              typeof product.price === "number" &&
+              product.price > 0
+          )
+          .map(
+            (product: {
+              _id: string;
+              name: string;
+              category: string;
+              concern?: string;
+              price: number;
+              originalPrice: number | null;
+              image: string;
+              rating?: number;
+              reviewCount?: number;
+              badge?: string;
+            }) => ({
+              id: product._id,
+              name: product.name,
+              category: product.category,
+              concern: product.concern ?? "",
+              price: product.price,
+              originalPrice: product.originalPrice ?? product.price,
+              image: product.image,
+              rating: product.rating ?? 0,
+              reviews: product.reviewCount ?? 0,
+              badge: product.badge || undefined,
+            })
+          );
+
+        setProducts(mappedProducts);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while loading products."
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadProducts();
+
+    return () => controller.abort();
+  }, []);
+
   const categories = [
     "All",
-    ...Array.from(
-      new Set(products.map((product) => product.category))
-    ),
+    ...Array.from(new Set(products.map((product) => product.category))),
   ];
 
   const concerns = [
     "All",
-    ...Array.from(
-      new Set(products.map((product) => product.concern))
-    ),
+    ...Array.from(new Set(products.map((product) => product.concern))),
   ];
 
   const filteredProducts = useMemo(() => {
@@ -41,39 +121,28 @@ export default function ProductsPage() {
     }
 
     if (category !== "All") {
-      result = result.filter(
-        (product) => product.category === category
-      );
+      result = result.filter((product) => product.category === category);
     }
 
     if (concern !== "All") {
-      result = result.filter(
-        (product) => product.concern === concern
-      );
+      result = result.filter((product) => product.concern === concern);
     }
 
     if (sort === "price-low") {
       result.sort((a, b) => a.price - b.price);
-    }
-
-    if (sort === "price-high") {
+    } else if (sort === "price-high") {
       result.sort((a, b) => b.price - a.price);
-    }
-
-    if (sort === "rating") {
+    } else if (sort === "rating") {
       result.sort((a, b) => b.rating - a.rating);
     }
 
     return result;
-  }, [search, category, concern, sort]);
+  }, [products, search, category, concern, sort]);
 
   return (
     <main className="min-h-screen bg-[#f8f7f3]">
-
-      {/* Header */}
       <section className="border-b border-[#deddd6] bg-white px-5 py-14 sm:px-10 lg:px-16">
         <div className="mx-auto max-w-[1400px]">
-
           <p className="text-xs uppercase tracking-[0.2em] text-gray-500">
             Henry&apos;s Store
           </p>
@@ -83,17 +152,14 @@ export default function ProductsPage() {
           </h1>
 
           <p className="mt-5 max-w-xl text-sm leading-6 text-gray-500">
-            Explore skincare, haircare and wellness essentials
-            selected for simple everyday routines.
+            Explore skincare, haircare and wellness essentials selected for
+            simple everyday routines.
           </p>
-
         </div>
       </section>
 
-      {/* Toolbar */}
       <section className="sticky top-[76px] z-30 border-b border-[#deddd6] bg-[#f8f7f3]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-5 py-4 sm:px-10 lg:px-16">
-
           <button
             onClick={() => setMobileFilters(true)}
             className="flex items-center gap-2 text-sm lg:hidden"
@@ -103,10 +169,9 @@ export default function ProductsPage() {
           </button>
 
           <p className="hidden text-sm text-gray-500 sm:block">
-            {filteredProducts.length} products
+            {loading ? "Loading products..." : `${filteredProducts.length} products`}
           </p>
 
-          {/* Search */}
           <div className="hidden max-w-sm flex-1 md:block">
             <input
               value={search}
@@ -116,38 +181,21 @@ export default function ProductsPage() {
             />
           </div>
 
-          {/* Sort */}
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
             className="h-11 rounded-full border border-[#d8d7d0] bg-white px-4 text-sm outline-none"
           >
-            <option value="featured">
-              Featured
-            </option>
-
-            <option value="price-low">
-              Price: Low to High
-            </option>
-
-            <option value="price-high">
-              Price: High to Low
-            </option>
-
-            <option value="rating">
-              Highest Rated
-            </option>
+            <option value="featured">Featured</option>
+            <option value="price-low">Price: Low to High</option>
+            <option value="price-high">Price: High to Low</option>
+            <option value="rating">Highest Rated</option>
           </select>
-
         </div>
       </section>
 
-      {/* Main */}
       <section className="mx-auto flex max-w-[1400px] gap-10 px-5 py-10 sm:px-10 lg:px-16">
-
-        {/* Desktop filters */}
         <aside className="hidden w-56 shrink-0 lg:block">
-
           <FilterGroup title="Category">
             {categories.map((item) => (
               <FilterButton
@@ -167,17 +215,13 @@ export default function ProductsPage() {
                 active={concern === item}
                 onClick={() => setConcern(item)}
               >
-                {item}
+                {item || "Unspecified"}
               </FilterButton>
             ))}
           </FilterGroup>
-
         </aside>
 
-        {/* Products */}
         <div className="flex-1">
-
-          {/* Mobile search */}
           <div className="mb-8 md:hidden">
             <input
               value={search}
@@ -187,51 +231,59 @@ export default function ProductsPage() {
             />
           </div>
 
-          {filteredProducts.length === 0 ? (
+          {loading ? (
+            <div className="flex min-h-[400px] items-center justify-center rounded-2xl bg-white">
+              <p className="text-sm text-gray-500">Loading products...</p>
+            </div>
+          ) : error ? (
+            <div className="flex min-h-[400px] items-center justify-center rounded-2xl bg-white p-6">
+              <div className="text-center">
+                <h2 className="text-xl font-medium">Could not load products</h2>
+                <p className="mt-2 text-sm text-gray-500">{error}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-5 rounded-full bg-[#1d392d] px-6 py-3 text-sm text-white"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="flex min-h-[400px] items-center justify-center rounded-2xl bg-white">
               <div className="text-center">
                 <h2 className="text-xl font-medium">
-                  No products found
+                  {products.length === 0 ? "Products coming soon" : "No products found"}
                 </h2>
-
                 <p className="mt-2 text-sm text-gray-500">
-                  Try another search or filter.
+                  {products.length === 0
+                    ? "Our product catalog is being prepared. Please check back soon."
+                    : "Try another search or filter."}
                 </p>
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-x-4 gap-y-12 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:gap-x-6">
               {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                />
+                <ProductCard key={product.id} product={product} />
               ))}
             </div>
           )}
-
         </div>
-
       </section>
 
-      {/* Mobile filter drawer */}
       {mobileFilters && (
         <div className="fixed inset-0 z-[100] lg:hidden">
-
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => setMobileFilters(false)}
           />
 
           <aside className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-[#f8f7f3] p-6">
-
             <div className="mb-8 flex items-center justify-between">
-              <h2 className="text-xl font-medium">
-                Filters
-              </h2>
-
+              <h2 className="text-xl font-medium">Filters</h2>
               <button
                 onClick={() => setMobileFilters(false)}
+                aria-label="Close filters"
               >
                 <X size={22} />
               </button>
@@ -256,7 +308,7 @@ export default function ProductsPage() {
                   active={concern === item}
                   onClick={() => setConcern(item)}
                 >
-                  {item}
+                  {item || "Unspecified"}
                 </FilterButton>
               ))}
             </FilterGroup>
@@ -267,11 +319,9 @@ export default function ProductsPage() {
             >
               Show {filteredProducts.length} products
             </button>
-
           </aside>
         </div>
       )}
-
     </main>
   );
 }
@@ -288,10 +338,7 @@ function FilterGroup({
       <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.15em]">
         {title}
       </h3>
-
-      <div className="flex flex-col items-start gap-2">
-        {children}
-      </div>
+      <div className="flex flex-col items-start gap-2">{children}</div>
     </div>
   );
 }

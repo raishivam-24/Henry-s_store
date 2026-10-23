@@ -1,5 +1,5 @@
 export type Product = {
-  id: number;
+  id: string | number;
   name: string;
   category: string;
   concern: string;
@@ -11,52 +11,49 @@ export type Product = {
   badge?: string;
 };
 
-export const products: Product[] = [
-  {
-    id: 1,
-    name: "Vitamin C Face Serum",
-    category: "Serum",
-    concern: "Dark Spots",
-    price: 499,
-    originalPrice: 699,
-    image: "/images/AGA FP Hair Gel.jpeg",
-    rating: 4.6,
-    reviews: 128,
-    badge: "BESTSELLER",
-  },
-  {
-    id: 2,
-    name: "Anti Hair Fall Serum",
-    category: "Hair Care",
-    concern: "Hair Fall",
-    price: 549,
-    originalPrice: 799,
-    image: "/images/ANTIFALL SER.jpeg",
-    rating: 4.5,
-    reviews: 96,
-    badge: "POPULAR",
-  },
-  {
-    id: 3,
-    name: "Anti Dandruff Shampoo",
-    category: "Shampoo",
-    concern: "Dandruff",
-    price: 399,
-    originalPrice: 599,
-    image: "/images/Antigrety Shampoo.jpeg",
-    rating: 4.4,
-    reviews: 84,
-  },
-  {
-    id: 4,
-    name: "Daily Skin Treatment",
-    category: "Skin Care",
-    concern: "Dull Skin",
-    price: 599,
-    originalPrice: 799,
-    image: "/images/Aziniv.jpeg",
-    rating: 4.7,
-    reviews: 152,
-    badge: "BESTSELLER",
-  },
-];
+type ApiProduct = {
+  _id: string;
+  name: string;
+  category: string;
+  concern?: string;
+  price: number | null;
+  originalPrice: number | null;
+  image: string;
+  rating?: number;
+  reviewCount?: number;
+  badge?: string;
+};
+
+export async function getProducts(): Promise<Product[]> {
+  const response = await fetch("/api/products");
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch products");
+  }
+
+  const data: { success: boolean; products: ApiProduct[] } =
+    await response.json();
+
+  if (!data.success) {
+    throw new Error("Products API returned an error");
+  }
+
+  return data.products
+    .filter(
+      (product) =>
+        typeof product.price === "number" &&
+        product.price > 0
+    )
+    .map((product) => ({
+      id: product._id,
+      name: product.name,
+      category: product.category,
+      concern: product.concern ?? "",
+      price: product.price as number,
+      originalPrice: product.originalPrice ?? product.price as number,
+      image: product.image,
+      rating: product.rating ?? 0,
+      reviews: product.reviewCount ?? 0,
+      badge: product.badge || undefined,
+    }));
+}
