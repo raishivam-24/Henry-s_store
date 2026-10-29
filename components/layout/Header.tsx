@@ -18,15 +18,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+
 const navigation = [
-  { label: "Explore", href: "/products", icon: LayoutGrid },
-  { label: "Concern", href: "/products?concern=acne", icon: Sparkles },
-  { label: "Category", href: "/products", icon: Grid2X2 },
-  {
-    label: "Ingredients",
-    href: "/products?ingredient=niacinamide",
-    icon: FlaskConical,
-  },
+  { label: "Explore", href: "/", icon: LayoutGrid },
+  { label: "Concern", href: "/concern", icon: Sparkles },
+  { label: "Category", href: "/category", icon: Grid2X2 },
+  { label: "Ingredients", href: "/ingredients", icon: FlaskConical },
 ];
 
 export default function Header() {

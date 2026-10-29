@@ -32,7 +32,11 @@ const accountLinks = [
 
 export default function Footer() {
   const [categories, setCategories] = useState<string[]>([]);
+const [currentYear, setCurrentYear] = useState<number | null>(null);
 
+useEffect(() => {
+  setCurrentYear(new Date().getFullYear());
+}, []);
   useEffect(() => {
     const controller = new AbortController();
 
@@ -255,8 +259,8 @@ export default function Footer() {
       <div className="border-t border-[#e9e7e2] bg-[#faf9f6]">
         <div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-5 py-5 text-xs text-[#77796f] sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
           <p>
-            © {new Date().getFullYear()} Henry&apos;s Store. All rights reserved.
-          </p>
+  © {currentYear ?? 2026} Henry&apos;s Store. All rights reserved.
+</p>
           <Link href="/products" className="hover:text-[#15968a]">
             Shop the collection
           </Link>

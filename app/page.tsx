@@ -13,7 +13,7 @@ export default function Home() {
     <>
       <AnnouncementBar />
 
-      <Header />
+     
 
       <main>
         <Hero />
@@ -27,7 +27,7 @@ export default function Home() {
         <Newsletter />
       </main>
 
-      <Footer />
+    
     </>
   );
 }

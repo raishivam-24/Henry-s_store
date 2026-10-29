@@ -4,6 +4,7 @@ export type Product = {
   name: string;
   category: string;
   concern: string;
+  description?: string;
   ingredients: string | string[];
   price: number | null;
   originalPrice: number | null;
@@ -18,6 +19,7 @@ export type ApiProduct = {
   _id: string;
   name: string;
   category?: string;
+  description?: string;
   concern?: string;
   ingredients?: string | string[];
   price: number | null;
