@@ -7,147 +7,220 @@ import Product from "../models/Product";
 
 dotenv.config({ path: ".env.local" });
 
-type CatalogItem = {
-  name: string;
-  slug: string;
-  description: string;
-  category: string;
+type CatalogProduct = {
   image: string;
-  price: number;
-  originalPrice?: number | null;
-  stock: number;
-  concern?: string;
-  ingredients?: string[];
-  images?: string[];
-  rating?: number;
-  reviewCount?: number;
-  badge?: string;
-  isFeatured?: boolean;
-  isActive?: boolean;
+  name: string;
+  description?: string;
+  ingredients?: string | string[];
+  brand?: string;
+  category?: string;
+  packSize?: string;
+  price: number | null;
+  mrp: number | null;
+  stock: number | null;
+  websiteStatus?: string;
+  isActive: boolean;
 };
 
-async function main() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error("MONGODB_URI is missing.");
+type CatalogFile = {
+  totalReviewed: number;
+  activeCount: number;
+  inactiveCount: number;
+  products: CatalogProduct[];
+};
 
-  const file = path.join(
+function createSlug(name: string): string {
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeIngredients(
+  ingredients: string | string[] | undefined
+): string[] {
+  if (!ingredients) return [];
+
+  const values = Array.isArray(ingredients)
+    ? ingredients
+    : ingredients.split(/[,;\n]+/);
+
+  return values.map((value) => value.trim()).filter(Boolean);
+}
+
+function validateCatalog(products: CatalogProduct[]): void {
+  if (products.length !== 90) {
+    throw new Error(
+      `Expected 90 catalog products, received ${products.length}.`
+    );
+  }
+
+  const images = new Set<string>();
+
+  for (const product of products) {
+    if (!product.image || !product.name?.trim()) {
+      throw new Error(
+        `Product is missing its image or name: ${JSON.stringify(product)}`
+      );
+    }
+
+    if (images.has(product.image)) {
+      throw new Error(`Duplicate catalog image: ${product.image}`);
+    }
+
+    images.add(product.image);
+
+    if (typeof product.isActive !== "boolean") {
+      throw new Error(
+        `Invalid isActive value for ${product.name}`
+      );
+    }
+
+    // The catalog must exclude only products marked DO NOT ADD.
+    const mustBeActive = !(
+      product.websiteStatus?.trim().toUpperCase().startsWith("DO NOT ADD")
+    );
+
+    if (product.isActive !== mustBeActive) {
+      throw new Error(
+        `Incorrect status for "${product.name}". ` +
+        `Website Status: "${product.websiteStatus ?? ""}". ` +
+        `Expected isActive=${mustBeActive}.`
+      );
+    }
+  }
+
+  const active = products.filter((product) => product.isActive).length;
+  const inactive = products.length - active;
+
+  if (active !== 76 || inactive !== 14) {
+    throw new Error(
+      `Unexpected counts: ${active} active, ${inactive} inactive. ` +
+      "Expected 76 active and 14 DO NOT ADD products."
+    );
+  }
+}
+
+async function main(): Promise<void> {
+  const mongoUri = process.env.MONGODB_URI;
+
+  if (!mongoUri) {
+    throw new Error(
+      "MONGODB_URI is missing. Check your .env.local file."
+    );
+  }
+
+  const catalogPath = path.resolve(
     process.cwd(),
     "scripts",
     "product-catalog-verified.json"
   );
 
-  if (!fs.existsSync(file)) {
-    throw new Error(
-      "Create scripts/product-catalog-verified.json with the verified catalog first."
-    );
+  if (!fs.existsSync(catalogPath)) {
+    throw new Error(`Catalog not found: ${catalogPath}`);
   }
 
   const catalog = JSON.parse(
-    fs.readFileSync(file, "utf8")
-  ) as CatalogItem[];
+    fs.readFileSync(catalogPath, "utf-8")
+  ) as CatalogFile;
 
-  if (catalog.length !== 90) {
-    throw new Error(`Expected 90 products; found ${catalog.length}. No changes made.`);
-  }
-
-  const slugs = new Set<string>();
-  const images = new Set<string>();
-
-  for (const p of catalog) {
-    if (
-      !p.name?.trim() ||
-      !p.slug?.trim() ||
-      !p.category?.trim() ||
-      !p.description?.trim() ||
-      !p.image?.startsWith("/images/products/") ||
-      !Number.isFinite(p.price) ||
-      p.price < 0 ||
-      !Number.isInteger(p.stock) ||
-      p.stock < 0
-    ) {
-      throw new Error(`Invalid or unverified fields for image: ${p.image}`);
-    }
-
-    if (
-      p.name.toLowerCase().startsWith("verify product:") ||
-      p.category === "Uncategorized"
-    ) {
-      throw new Error(`Placeholder data remains for ${p.image}`);
-    }
-
-    if (slugs.has(p.slug) || images.has(p.image)) {
-      throw new Error(`Duplicate slug or image: ${p.image}`);
-    }
-
-    slugs.add(p.slug);
-    images.add(p.image);
-
-    const localImage = path.join(
-      process.cwd(),
-      "public",
-      p.image.replace(/^\/+/, "")
+  if (!Array.isArray(catalog.products)) {
+    throw new Error(
+      "Invalid catalog format: expected a products array."
     );
-
-    if (!fs.existsSync(localImage)) {
-      throw new Error(`Image file missing: ${p.image}`);
-    }
   }
 
-  await mongoose.connect(uri);
+  const products = catalog.products;
+
+  validateCatalog(products);
+
+  console.log("Catalog validation passed.");
+  console.log(`Total products: ${products.length}`);
+  console.log(
+    `Products to activate: ${products.filter((p) => p.isActive).length}`
+  );
+  console.log(
+    `Products to deactivate: ${products.filter((p) => !p.isActive).length}`
+  );
+
+  await mongoose.connect(mongoUri);
+  console.log("Connected to MongoDB.");
 
   try {
-    const dbProducts = await Product.find({})
+    // Match existing records by image so we update rather than duplicate.
+    const existingProducts = await Product.find({})
       .select("_id image")
       .lean();
 
-    const dbImages = new Set(dbProducts.map((p) => p.image));
+    const existingImages = new Set(
+      existingProducts
+        .map((product: any) => product.image)
+        .filter(Boolean)
+    );
 
-    for (const p of catalog) {
-      if (!dbImages.has(p.image)) {
-        throw new Error(`No existing database record for ${p.image}`);
-      }
-    }
+    const missingImages = products
+      .filter((product) => !existingImages.has(product.image))
+      .map((product) => product.image);
 
-    if (dbProducts.length !== catalog.length) {
+    if (missingImages.length > 0) {
       throw new Error(
-        `Database has ${dbProducts.length} records; catalog has ${catalog.length}. No changes made.`
+        `Cannot find ${missingImages.length} matching MongoDB records:\n` +
+        missingImages.join("\n") +
+        "\nNo product updates were performed."
       );
     }
 
-    // Update only after the full catalog passes validation.
-    for (const p of catalog) {
-      await Product.updateOne(
-        { image: p.image },
-        {
-          $set: {
-            name: p.name.trim(),
-            slug: p.slug.trim().toLowerCase(),
-            description: p.description.trim(),
-            category: p.category.trim(),
-            concern: p.concern ?? "",
-            ingredients: p.ingredients ?? [],
-            price: p.price,
-            originalPrice: p.originalPrice ?? null,
-            images: p.images?.length ? p.images : [p.image],
-            stock: p.stock,
-            rating: p.rating ?? 0,
-            reviewCount: p.reviewCount ?? 0,
-            badge: p.badge ?? "",
-            isFeatured: p.isFeatured ?? false,
-            isActive: p.isActive ?? true,
-          },
-        }
-      );
-    }
+    const operations = products.map((product) => {
+      const update: Record<string, unknown> = {
+        name: product.name.trim(),
+        slug: createSlug(product.name),
+        description: product.description?.trim() ?? "",
+        image: product.image,
+        images: [product.image],
+        ingredients: normalizeIngredients(product.ingredients),
+        brand: product.brand?.trim() ?? "",
+        category: product.category?.trim() || "Other",
+        concern: "",
+        packSize: product.packSize?.trim() ?? "",
+        isActive: product.isActive,
+      };
 
-    console.log("Verified catalog update completed.");
-    console.log(`Updated ${catalog.length} existing products.`);
+      // Keep missing values null rather than inventing prices or stock.
+      update.price = product.price ?? null;
+      update.originalPrice = product.mrp ?? null;
+      update.stock = product.stock ?? null;
+
+      return {
+        updateOne: {
+          filter: { image: product.image },
+          update: { $set: update },
+          upsert: false,
+        },
+      };
+    });
+
+    const result = await Product.bulkWrite(operations, {
+      ordered: true,
+    });
+
+    console.log("\nProduct import completed.");
+    console.log(`Matched: ${result.matchedCount}`);
+    console.log(`Modified: ${result.modifiedCount}`);
+    console.log("Expected active products: 76");
+    console.log("Expected inactive products: 14");
+    console.log(
+      "Only products marked DO NOT ADD were deactivated."
+    );
   } finally {
     await mongoose.disconnect();
+    console.log("MongoDB connection closed.");
   }
 }
 
-main().catch((error) => {
-  console.error("Catalog update failed:", error);
+main().catch((error: unknown) => {
+  console.error("\nProduct import failed:");
+  console.error(error);
   process.exitCode = 1;
 });

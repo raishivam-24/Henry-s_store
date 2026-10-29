@@ -1,59 +1,66 @@
+
 export type Product = {
   id: string | number;
   name: string;
   category: string;
   concern: string;
-  price: number;
-  originalPrice: number;
+  ingredients: string | string[];
+  price: number | null;
+  originalPrice: number | null;
   image: string;
   rating: number;
   reviews: number;
   badge?: string;
+  stock?: number | null;
 };
 
-type ApiProduct = {
+export type ApiProduct = {
   _id: string;
   name: string;
-  category: string;
+  category?: string;
   concern?: string;
+  ingredients?: string | string[];
   price: number | null;
   originalPrice: number | null;
   image: string;
+  images?: string[];
   rating?: number;
   reviewCount?: number;
   badge?: string;
+  stock?: number | null;
+  isActive?: boolean;
 };
 
 export async function getProducts(): Promise<Product[]> {
-  const response = await fetch("/api/products");
+  const response = await fetch("/api/products", {
+    cache: "no-store",
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch products");
   }
 
-  const data: { success: boolean; products: ApiProduct[] } =
-    await response.json();
+  const data: {
+    success: boolean;
+    products: ApiProduct[];
+  } = await response.json();
 
-  if (!data.success) {
-    throw new Error("Products API returned an error");
+  if (!data.success || !Array.isArray(data.products)) {
+    throw new Error("Products API returned an invalid response");
   }
 
-  return data.products
-    .filter(
-      (product) =>
-        typeof product.price === "number" &&
-        product.price > 0
-    )
-    .map((product) => ({
-      id: product._id,
-      name: product.name,
-      category: product.category,
-      concern: product.concern ?? "",
-      price: product.price as number,
-      originalPrice: product.originalPrice ?? product.price as number,
-      image: product.image,
-      rating: product.rating ?? 0,
-      reviews: product.reviewCount ?? 0,
-      badge: product.badge || undefined,
-    }));
+  return data.products.map((item) => ({
+    id: item._id,
+    name: item.name,
+    category: item.category ?? "Skincare",
+    concern: item.concern ?? "",
+    ingredients: item.ingredients ?? "",
+    price: item.price,
+    originalPrice: item.originalPrice,
+    image: item.image || item.images?.[0] || "",
+    rating: item.rating ?? 0,
+    reviews: item.reviewCount ?? 0,
+    badge: item.badge || undefined,
+    stock: item.stock ?? null,
+  }));
 }
