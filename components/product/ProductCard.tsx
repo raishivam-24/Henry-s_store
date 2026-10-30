@@ -64,7 +64,13 @@ export default function ProductCard({ product }: ProductCardProps) {
   return (
     <article className="group min-w-0">
       <div className="relative">
-        <Link href={productUrl} className="block">
+        {/* Product image opens in a new tab */}
+        <Link
+          href={productUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block"
+        >
           <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#efeee8]">
             {product.badge && (
               <span className="absolute left-3 top-3 z-10 rounded-full bg-[#1d392d] px-3 py-1.5 text-[9px] font-semibold tracking-wider text-white">
@@ -138,7 +144,12 @@ export default function ProductCard({ product }: ProductCardProps) {
           <span className="text-xs text-gray-400">({product.reviews})</span>
         </div>
 
-        <Link href={productUrl}>
+        {/* Product name also opens in a new tab */}
+        <Link
+          href={productUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           <h3 className="mt-2 line-clamp-2 text-sm font-medium leading-5 transition hover:opacity-60">
             {product.name}
           </h3>

@@ -20,6 +20,7 @@ type ApiProduct = {
   rating?: number;
   reviewCount?: number;
   badge?: string;
+  stock?: number | null;
 };
 
 async function getProduct(id: string): Promise<ApiProduct | null> {
@@ -55,6 +56,7 @@ async function getProduct(id: string): Promise<ApiProduct | null> {
     rating: product.rating,
     reviewCount: product.reviewCount,
     badge: product.badge,
+    stock: product.stock ?? null,
   };
 }
 
