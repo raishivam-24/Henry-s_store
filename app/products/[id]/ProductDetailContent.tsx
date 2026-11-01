@@ -1,4 +1,3 @@
-
 import { notFound } from "next/navigation";
 import mongoose from "mongoose";
 import ProductDetail from "@/components/product/ProductDetail";
@@ -17,10 +16,10 @@ type ApiProduct = {
   originalPrice: number | null;
   image: string;
   images?: string[];
-  rating?: number;
-  reviewCount?: number;
+  stock: number | null;
+  rating: number;
+  reviewCount: number;
   badge?: string;
-  stock?: number | null;
 };
 
 async function getProduct(id: string): Promise<ApiProduct | null> {
@@ -48,15 +47,15 @@ async function getProduct(id: string): Promise<ApiProduct | null> {
     category: product.category,
     concern: product.concern,
     description: product.description,
-    ingredients: product.ingredients,
+    ingredients: product.ingredients ?? [],
     price: product.price,
     originalPrice: product.originalPrice,
     image: product.image,
-    images: product.images,
-    rating: product.rating,
-    reviewCount: product.reviewCount,
-    badge: product.badge,
+    images: product.images ?? [],
     stock: product.stock ?? null,
+    rating: product.rating ?? 0,
+    reviewCount: product.reviewCount ?? 0,
+    badge: product.badge,
   };
 }
 

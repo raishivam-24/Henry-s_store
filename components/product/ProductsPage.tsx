@@ -1,8 +1,9 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
+
 import {
   Search,
   RotateCcw,
@@ -10,7 +11,6 @@ import {
   ChevronDown,
   ArrowDownWideNarrow,
   Sparkles,
-  ShoppingBag,
   Leaf,
   ArrowRight,
   SlidersHorizontal,
@@ -78,14 +78,31 @@ export default function ProductsPage() {
 
   // Sync filters with homepage URLs.
   useEffect(() => {
-    setSearch(searchParams.get("search") ?? "");
-    setCategory(searchParams.get("category") || "All");
-    setConcern(searchParams.get("concern") || "All");
-    setIngredient(searchParams.get("ingredient") || "All");
+    let cancelled = false;
+
+    const nextSearch = searchParams.get("search") ?? "";
+    const nextCategory = searchParams.get("category") || "All";
+    const nextConcern = searchParams.get("concern") || "All";
+    const nextIngredient = searchParams.get("ingredient") || "All";
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      setSearch(nextSearch);
+      setCategory(nextCategory);
+      setConcern(nextConcern);
+      setIngredient(nextIngredient);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [searchParams]);
 
   // Load shared search history.
   useEffect(() => {
+    let cancelled = false;
+
     try {
       const saved = localStorage.getItem(HISTORY_KEY);
 
@@ -93,14 +110,28 @@ export default function ProductsPage() {
         const parsed: unknown = JSON.parse(saved);
 
         if (Array.isArray(parsed)) {
-          setRecentSearches(
-            parsed.filter((item): item is string => typeof item === "string")
+          const validSearches = parsed.filter(
+            (item): item is string => typeof item === "string"
           );
+
+          queueMicrotask(() => {
+            if (!cancelled) {
+              setRecentSearches(validSearches);
+            }
+          });
         }
       }
     } catch {
-      setRecentSearches([]);
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setRecentSearches([]);
+        }
+      });
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Fetch products from MongoDB API.
@@ -163,7 +194,8 @@ export default function ProductsPage() {
       }
     }
 
-    loadProducts();
+    void loadProducts();
+
     return () => controller.abort();
   }, []);
 
@@ -201,9 +233,7 @@ export default function ProductsPage() {
       "All",
       ...Array.from(
         new Set(
-          products.flatMap((product) =>
-            getIngredients(product.ingredients)
-          )
+          products.flatMap((product) => getIngredients(product.ingredients))
         )
       ).sort((a, b) => a.localeCompare(b)),
     ],
@@ -222,8 +252,7 @@ export default function ProductsPage() {
         normalize(label).includes(query) &&
         !results.some(
           (item) =>
-            normalize(item.label) === normalize(label) &&
-            item.type === type
+            normalize(item.label) === normalize(label) && item.type === type
         )
       ) {
         results.push({ label, type });
@@ -231,9 +260,18 @@ export default function ProductsPage() {
     }
 
     products.forEach((product) => add(product.name, "Product"));
-    categories.filter((item) => item !== "All").forEach((item) => add(item, "Category"));
-    concerns.filter((item) => item !== "All").forEach((item) => add(item, "Concern"));
-    ingredients.filter((item) => item !== "All").forEach((item) => add(item, "Ingredient"));
+
+    categories
+      .filter((item) => item !== "All")
+      .forEach((item) => add(item, "Category"));
+
+    concerns
+      .filter((item) => item !== "All")
+      .forEach((item) => add(item, "Concern"));
+
+    ingredients
+      .filter((item) => item !== "All")
+      .forEach((item) => add(item, "Ingredient"));
 
     return results.slice(0, 7);
   }, [products, search, categories, concerns, ingredients]);
@@ -399,14 +437,12 @@ export default function ProductsPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f8f3] text-[#20241f]">
-
       {/* Premium hero */}
       <section className="relative isolate overflow-hidden border-b border-[#e5e9df] bg-gradient-to-br from-[#f2f5ed] via-[#edf2e9] to-[#e2ecdf] px-5 py-14 sm:px-8 sm:py-20 lg:px-12 lg:py-20">
         <div className="pointer-events-none absolute -right-24 -top-32 h-[420px] w-[420px] rounded-full bg-[#cbdcc5]/40 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-40 left-1/4 h-96 w-96 rounded-full bg-white/70 blur-3xl" />
 
         <div className="relative mx-auto grid max-w-[1500px] items-center gap-12 lg:grid-cols-[1.15fr_0.85fr]">
-
           <div className="relative z-10 max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#d3dfd0] bg-white/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#287d6c] shadow-sm">
               <Sparkles size={13} />
@@ -421,9 +457,9 @@ export default function ProductsPage() {
             </h1>
 
             <p className="mt-6 max-w-xl text-sm leading-7 text-[#707b70] sm:text-base sm:leading-8">
-              Discover skincare and personal-care essentials designed
-              to make everyday care feel special. Find your favourites
-              by skin concern, category or ingredient.
+              Discover skincare and personal-care essentials designed to make
+              everyday care feel special. Find your favourites by skin concern,
+              category or ingredient.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -433,7 +469,10 @@ export default function ProductsPage() {
                 className="group flex items-center gap-3 rounded-full bg-[#173e32] px-7 py-3.5 text-sm font-medium text-white shadow-lg shadow-[#173e32]/15 transition hover:-translate-y-1 hover:bg-[#245744]"
               >
                 Shop the collection
-                <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+                <ArrowRight
+                  size={16}
+                  className="transition-transform group-hover:translate-x-1"
+                />
               </button>
 
               <button
@@ -450,6 +489,7 @@ export default function ProductsPage() {
                 <Leaf size={16} className="text-[#398575]" />
                 Everyday essentials
               </div>
+
               <div className="flex items-center gap-2 text-xs text-[#627263]">
                 <Sparkles size={16} className="text-[#398575]" />
                 Simple skincare routines
@@ -489,9 +529,12 @@ export default function ProductsPage() {
                       className={`absolute flex h-[225px] w-[112px] items-center justify-center overflow-hidden rounded-2xl border border-white/80 bg-white/75 p-2 shadow-[0_20px_35px_rgba(42,70,45,0.15)] backdrop-blur-sm transition duration-500 hover:-translate-y-3 sm:h-[245px] sm:w-[125px] ${positions[index]}`}
                     >
                       {image ? (
-                        <img
+                        <Image
                           src={image}
                           alt={product.name}
+                          width={125}
+                          height={245}
+                          sizes="(max-width: 640px) 112px, 125px"
                           className="h-full w-full object-contain"
                         />
                       ) : (
@@ -552,7 +595,6 @@ export default function ProductsPage() {
       <section className="sticky top-[76px] z-30 border-b border-[#e7e8df] bg-white/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-8 lg:px-12">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1.5fr)_repeat(3,minmax(135px,1fr))_minmax(145px,1fr)]">
-
             {/* Product search */}
             <div className="relative min-w-0">
               <div className="relative">
@@ -665,11 +707,15 @@ export default function ProductsPage() {
                               className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left hover:bg-[#f0f5ed]"
                             >
                               <span className="flex min-w-0 items-center gap-3">
-                                <Search size={15} className="shrink-0 text-[#398d7d]" />
+                                <Search
+                                  size={15}
+                                  className="shrink-0 text-[#398d7d]"
+                                />
                                 <span className="truncate text-sm text-[#303a31]">
                                   {item.label}
                                 </span>
                               </span>
+
                               <span className="shrink-0 rounded-full bg-[#f2f5f0] px-2 py-1 text-[10px] text-[#778477]">
                                 {item.type}
                               </span>
@@ -763,18 +809,21 @@ export default function ProductsPage() {
                   onRemove={() => removeFilter("search")}
                 />
               )}
+
               {category !== "All" && (
                 <FilterChip
                   label={category}
                   onRemove={() => removeFilter("category")}
                 />
               )}
+
               {concern !== "All" && (
                 <FilterChip
                   label={concern}
                   onRemove={() => removeFilter("concern")}
                 />
               )}
+
               {ingredient !== "All" && (
                 <FilterChip
                   label={ingredient}
@@ -841,10 +890,10 @@ export default function ProductsPage() {
           </div>
         ) : error ? (
           <div className="rounded-3xl border border-[#e8e9e1] bg-white px-5 py-16 text-center">
-            <h3 className="text-xl font-semibold">
-              Could not load products
-            </h3>
+            <h3 className="text-xl font-semibold">Could not load products</h3>
+
             <p className="mt-2 text-sm text-[#858b81]">{error}</p>
+
             <button
               type="button"
               onClick={() => window.location.reload()}
@@ -864,8 +913,8 @@ export default function ProductsPage() {
             </h3>
 
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#858b81]">
-              We couldn&apos;t find products matching these filters.
-              Try changing your selection or explore the complete collection.
+              We couldn&apos;t find products matching these filters. Try
+              changing your selection or explore the complete collection.
             </p>
 
             <button
@@ -891,6 +940,7 @@ export default function ProductsPage() {
             <Leaf size={16} />
             A little care, every day.
           </p>
+
           <p className="mt-2 text-xs text-[#899087]">
             Discover the right essentials for your everyday routine.
           </p>

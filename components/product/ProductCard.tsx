@@ -3,9 +3,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Heart, Star, ShoppingBag, Check, Bell } from "lucide-react";
 import { useState } from "react";
-import { useCart } from "@/context/CartContext";
+import { useCart, type CartItem } from "@/context/CartContext";
 import type { Product } from "@/lib/products";
 
 type ProductCardProps = {
@@ -13,8 +14,12 @@ type ProductCardProps = {
 };
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const router = useRouter();
+
   const [wishlisted, setWishlisted] = useState(false);
   const [added, setAdded] = useState(false);
+  const [adding, setAdding] = useState(false);
+
   const { addItem } = useCart();
 
   const price = product.price;
@@ -43,28 +48,108 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const productUrl = `/products/${product.id}`;
 
-  const handleAddToBag = () => {
-    if (!canPurchase || typeof stock !== "number" || !hasPrice) return;
+  const saveGuestCartItem = (item: Omit<CartItem, "quantity">) => {
+    const GUEST_CART_KEY = "henrys-store-guest-cart";
 
-    const success = addItem(
-      {
-        id: String(product.id),
-        name: product.name,
-        image: product.image,
-        price,
-        stock,
-        category: product.category,
-      },
-      1
-    );
+    try {
+      const storedCart = localStorage.getItem(GUEST_CART_KEY);
+      const guestCart: CartItem[] = storedCart
+        ? JSON.parse(storedCart)
+        : [];
 
-    setAdded(success);
+      const existingItem = guestCart.find(
+        (cartItem) => cartItem.id === item.id
+      );
+
+      if (existingItem) {
+        existingItem.quantity = Math.min(
+          existingItem.quantity + 1,
+          item.stock
+        );
+        existingItem.stock = item.stock;
+      } else {
+        guestCart.push({
+          ...item,
+          quantity: 1,
+        });
+      }
+
+      localStorage.setItem(
+        GUEST_CART_KEY,
+        JSON.stringify(guestCart)
+      );
+
+      return true;
+    } catch (error) {
+      console.error("Could not save guest cart:", error);
+      return false;
+    }
+  };
+
+  const handleAddToBag = async () => {
+    if (!canPurchase || typeof stock !== "number" || !hasPrice || adding) {
+      return;
+    }
+
+    setAdding(true);
+    setAdded(false);
+
+    const item: Omit<CartItem, "quantity"> = {
+      id: String(product.id),
+      name: product.name,
+      image: product.image,
+      price,
+      stock,
+      category: product.category,
+    };
+
+    try {
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        const saved = saveGuestCartItem(item);
+
+        if (!saved) {
+          setAdding(false);
+          return;
+        }
+
+        const returnUrl =
+          window.location.pathname + window.location.search;
+
+        router.push(
+          `/login?redirectTo=${encodeURIComponent(returnUrl)}`
+        );
+
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Unable to verify your login status.");
+      }
+
+      const result = await response.json();
+
+      if (!result.user) {
+        throw new Error("User session could not be verified.");
+      }
+
+      const success = addItem(item, 1);
+      setAdded(success);
+    } catch (error) {
+      console.error("Add to bag failed:", error);
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
     <article className="group min-w-0">
       <div className="relative">
-        {/* Product image opens in a new tab */}
         <Link
           href={productUrl}
           target="_blank"
@@ -90,7 +175,9 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         <button
           type="button"
-          aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          aria-label={
+            wishlisted ? "Remove from wishlist" : "Add to wishlist"
+          }
           aria-pressed={wishlisted}
           onClick={() => setWishlisted((current) => !current)}
           className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm transition hover:bg-gray-100"
@@ -108,10 +195,20 @@ export default function ProductCard({ product }: ProductCardProps) {
             <button
               type="button"
               onClick={handleAddToBag}
-              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white px-2 py-3 text-xs font-medium shadow-lg transition hover:bg-[#1d392d] hover:text-white sm:text-sm"
+              disabled={adding}
+              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white px-2 py-3 text-xs font-medium shadow-lg transition hover:bg-[#1d392d] hover:text-white disabled:cursor-wait disabled:opacity-70 sm:text-sm"
             >
-              {added ? <Check size={16} /> : <ShoppingBag size={16} />}
-              {added ? "Added to bag" : "Add to bag"}
+              {added ? (
+                <Check size={16} />
+              ) : (
+                <ShoppingBag size={16} />
+              )}
+
+              {adding
+                ? "Please wait..."
+                : added
+                  ? "Added to bag"
+                  : "Add to bag"}
             </button>
           ) : hasPrice ? (
             <button
@@ -139,12 +236,17 @@ export default function ProductCard({ product }: ProductCardProps) {
 
       <div className="pt-4">
         <div className="flex items-center gap-1">
-          <Star size={13} fill="currentColor" strokeWidth={1.5} />
+          <Star
+            size={13}
+            fill="currentColor"
+            strokeWidth={1.5}
+          />
           <span className="text-xs">{product.rating}</span>
-          <span className="text-xs text-gray-400">({product.reviews})</span>
+          <span className="text-xs text-gray-400">
+            ({product.reviews})
+          </span>
         </div>
 
-        {/* Product name also opens in a new tab */}
         <Link
           href={productUrl}
           target="_blank"
@@ -155,7 +257,9 @@ export default function ProductCard({ product }: ProductCardProps) {
           </h3>
         </Link>
 
-        <p className="mt-1 text-xs text-gray-500">{product.category}</p>
+        <p className="mt-1 text-xs text-gray-500">
+          {product.category}
+        </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold">

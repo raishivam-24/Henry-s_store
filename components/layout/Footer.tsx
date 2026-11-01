@@ -32,11 +32,8 @@ const accountLinks = [
 
 export default function Footer() {
   const [categories, setCategories] = useState<string[]>([]);
-const [currentYear, setCurrentYear] = useState<number | null>(null);
+  const currentYear = new Date().getFullYear();
 
-useEffect(() => {
-  setCurrentYear(new Date().getFullYear());
-}, []);
   useEffect(() => {
     const controller = new AbortController();
 
@@ -109,11 +106,20 @@ useEffect(() => {
 
             <div className="mt-7 space-y-3 text-sm text-[#65675f]">
               <p className="flex items-start gap-3">
-                <Mail size={17} className="mt-0.5 shrink-0 text-[#239b91]" />
-                <span>Contact us through our official store contact details.</span>
+                <Mail
+                  size={17}
+                  className="mt-0.5 shrink-0 text-[#239b91]"
+                />
+                <span>
+                  Contact us through our official store contact details.
+                </span>
               </p>
+
               <p className="flex items-start gap-3">
-                <MapPin size={17} className="mt-0.5 shrink-0 text-[#239b91]" />
+                <MapPin
+                  size={17}
+                  className="mt-0.5 shrink-0 text-[#239b91]"
+                />
                 <span>Shop skincare essentials online.</span>
               </p>
             </div>
@@ -191,15 +197,15 @@ useEffect(() => {
             </h3>
 
             <div className="mt-6 flex items-center gap-5">
-              <a
+              {/* <a
                 href="https://www.instagram.com/"
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 aria-label="Instagram"
                 className="text-[#252720] transition hover:text-[#15968a]"
               >
-              
-              </a>
+                <Instagram size={19} />
+              </a> */}
 
               <a
                 href="mailto:"
@@ -236,7 +242,7 @@ useEffect(() => {
           <div className="flex items-center justify-center gap-4 sm:justify-center">
             <RotateCcw size={29} strokeWidth={1.5} />
             <div>
-              <p className="text-sm font-medium">Returns & Exchanges</p>
+              <p className="text-sm font-medium">Returns &amp; Exchanges</p>
               <p className="mt-1 text-xs text-[#77796f]">
                 Review the applicable store policy.
               </p>
@@ -259,8 +265,9 @@ useEffect(() => {
       <div className="border-t border-[#e9e7e2] bg-[#faf9f6]">
         <div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-5 py-5 text-xs text-[#77796f] sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
           <p>
-  © {currentYear ?? 2026} Henry&apos;s Store. All rights reserved.
-</p>
+            © {currentYear} Henry&apos;s Store. All rights reserved.
+          </p>
+
           <Link href="/products" className="hover:text-[#15968a]">
             Shop the collection
           </Link>

@@ -1,40 +1,48 @@
+import mongoose, { Schema, type Model, Types } from "mongoose";
 
-import mongoose, { Schema, type Model } from "mongoose";
+export type ReviewStatus = "pending" | "approved" | "rejected";
 
 export interface IReview {
-  product: mongoose.Types.ObjectId;
-  user: mongoose.Types.ObjectId;
+  productId: Types.ObjectId;
+  customerName: string;
   rating: number;
-  title?: string;
+  title: string;
   comment: string;
-  isApproved: boolean;
+  images: string[];
+  status: ReviewStatus;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 const ReviewSchema = new Schema<IReview>(
   {
-    product: {
+    productId: {
       type: Schema.Types.ObjectId,
       ref: "Product",
       required: true,
+      index: true,
     },
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
+    customerName: {
+      type: String,
       required: true,
+      trim: true,
+      maxlength: 60,
     },
     rating: {
       type: Number,
       required: true,
       min: 1,
       max: 5,
+      validate: {
+        validator: Number.isInteger,
+        message: "Rating must be a whole number from 1 to 5.",
+      },
     },
     title: {
       type: String,
-      default: "",
+      required: true,
       trim: true,
-      maxlength: 120,
+      maxlength: 100,
     },
     comment: {
       type: String,
@@ -42,21 +50,30 @@ const ReviewSchema = new Schema<IReview>(
       trim: true,
       maxlength: 2000,
     },
-    isApproved: {
-      type: Boolean,
-      default: false,
+    images: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (images: string[]) => images.length <= 5,
+        message: "You can upload a maximum of 5 review photos.",
+      },
+    },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+      index: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-ReviewSchema.index(
-  { product: 1, user: 1 },
-  { unique: true }
-);
+ReviewSchema.index({ productId: 1, status: 1, createdAt: -1 });
 
 const Review: Model<IReview> =
-  mongoose.models.Review ??
+  mongoose.models.Review ||
   mongoose.model<IReview>("Review", ReviewSchema);
 
 export default Review;

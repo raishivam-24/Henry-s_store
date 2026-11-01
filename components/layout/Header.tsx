@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -9,6 +8,7 @@ import {
   type FormEvent,
 } from "react";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -66,28 +66,40 @@ export default function Header() {
   const desktopSearchRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
 
-  // Load recent searches.
+  // Load recent searches from localStorage.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(HISTORY_KEY);
+    let cancelled = false;
 
-      if (saved) {
-        const parsed: unknown = JSON.parse(saved);
+    queueMicrotask(() => {
+      if (cancelled) return;
 
-        if (Array.isArray(parsed)) {
-          setRecentSearches(
-            parsed.filter(
-              (item): item is string => typeof item === "string"
-            )
-          );
+      try {
+        const saved = localStorage.getItem(HISTORY_KEY);
+
+        if (saved) {
+          const parsed: unknown = JSON.parse(saved);
+
+          if (Array.isArray(parsed)) {
+            setRecentSearches(
+              parsed.filter(
+                (item): item is string => typeof item === "string"
+              )
+            );
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setRecentSearches([]);
         }
       }
-    } catch {
-      setRecentSearches([]);
-    }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Load products for suggestions.
+  // Load products for search suggestions.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -106,24 +118,36 @@ export default function Header() {
           setProducts(data.products);
         }
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") return;
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
       }
     }
 
-    loadProducts();
+    void loadProducts();
 
     return () => controller.abort();
   }, []);
 
-  // Close suggestions and reset the search when the route changes.
+  // Reset the header when the route changes.
   useEffect(() => {
-    setShowSuggestions(false);
-    setSearchQuery("");
-    setMobileSearchOpen(false);
-    setMobileOpen(false);
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      setShowSuggestions(false);
+      setSearchQuery("");
+      setMobileSearchOpen(false);
+      setMobileOpen(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
-  // Also reset when browser Back/Forward changes the history entry.
+  // Reset the header on browser Back/Forward navigation.
   useEffect(() => {
     function handleHistoryNavigation() {
       setShowSuggestions(false);
@@ -139,7 +163,7 @@ export default function Header() {
     };
   }, []);
 
-  // Close suggestions when clicking outside either search area.
+  // Close suggestions when clicking outside the search areas.
   useEffect(() => {
     function handleOutsideClick(event: PointerEvent) {
       const target = event.target;
@@ -169,6 +193,7 @@ export default function Header() {
     };
   }, []);
 
+  // Filter matching products.
   const suggestions = useMemo(() => {
     const query = normalize(searchQuery);
 
@@ -177,12 +202,15 @@ export default function Header() {
     return products
       .filter((product) =>
         normalize(
-          `${product.name} ${product.category ?? ""} ${product.concern ?? ""}`
+          `${product.name} ${product.category ?? ""} ${
+            product.concern ?? ""
+          }`
         ).includes(query)
       )
       .slice(0, 5);
   }, [products, searchQuery]);
 
+  // Save a search in recent searches.
   function saveSearch(value: string) {
     const query = value.trim();
 
@@ -204,6 +232,7 @@ export default function Header() {
     }
   }
 
+  // Clear recent search history.
   function clearHistory() {
     setRecentSearches([]);
 
@@ -214,6 +243,7 @@ export default function Header() {
     }
   }
 
+  // Perform product search.
   function performSearch(value = searchQuery) {
     const query = value.trim();
 
@@ -234,6 +264,7 @@ export default function Header() {
     performSearch();
   }
 
+  // Handle navigation clicks.
   function handleNavigationClick(href: string) {
     setShowSuggestions(false);
     setSearchQuery("");
@@ -248,12 +279,12 @@ export default function Header() {
     }
   }
 
-  function SearchSuggestions() {
+  // Render search suggestions without creating a nested component.
+  function renderSearchSuggestions() {
     if (!showSuggestions) return null;
 
     return (
       <div className="absolute left-0 right-0 top-[calc(100%+10px)] z-[100] overflow-hidden rounded-2xl border border-[#e4e9e0] bg-white p-2 shadow-[0_16px_45px_rgba(27,55,39,0.15)]">
-
         {!searchQuery.trim() ? (
           <>
             <div className="flex items-center justify-between px-3 py-2">
@@ -274,24 +305,18 @@ export default function Header() {
             </div>
 
             {recentSearches.length > 0 ? (
-              recentSearches.map((item) => (
+              recentSearches.map((item, index) => (
                 <button
-                  key={item}
+                  key={`${item}-${index}`}
                   type="button"
                   onClick={() => performSearch(item)}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-[#455347] hover:bg-[#f0f5ed]"
                 >
-                  <Clock3
-                    size={15}
-                    className="text-[#89978a]"
-                  />
+                  <Clock3 size={15} className="text-[#89978a]" />
 
                   <span className="truncate">{item}</span>
 
-                  <ArrowRight
-                    size={14}
-                    className="ml-auto"
-                  />
+                  <ArrowRight size={14} className="ml-auto" />
                 </button>
               ))
             ) : (
@@ -317,12 +342,14 @@ export default function Header() {
                     onClick={() => performSearch(product.name)}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-[#f0f5ed]"
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f1f3ed]">
+                    <span className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f1f3ed]">
                       {image ? (
-                        <img
+                        <Image
                           src={image}
                           alt={product.name}
-                          className="h-full w-full object-contain"
+                          fill
+                          sizes="44px"
+                          className="object-contain"
                         />
                       ) : (
                         <Search size={16} />
@@ -339,10 +366,7 @@ export default function Header() {
                       </span>
                     </span>
 
-                    <ArrowRight
-                      size={14}
-                      className="shrink-0"
-                    />
+                    <ArrowRight size={14} className="shrink-0" />
                   </button>
                 );
               })
@@ -368,16 +392,15 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#eeefe9] bg-white/95 shadow-sm backdrop-blur-xl">
-
       <div className="mx-auto flex h-[78px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-10">
-
         {/* Logo */}
         <Link
           href="/"
           onClick={() => handleNavigationClick("/")}
           className="shrink-0 text-xl font-black tracking-[-0.07em] text-[#171a17] sm:text-2xl"
         >
-          HENRY&apos;S<span className="text-[#238c78]">.</span>
+          HENRY&apos;S
+          <span className="text-[#238c78]">.</span>
 
           <span className="ml-1 text-[9px] font-medium tracking-[0.18em] text-[#7f877e]">
             SKINCARE
@@ -446,7 +469,7 @@ export default function Header() {
             )}
           </form>
 
-          <SearchSuggestions />
+          {renderSearchSuggestions()}
         </div>
 
         {/* Account and cart */}
@@ -542,7 +565,7 @@ export default function Header() {
               )}
             </form>
 
-            <SearchSuggestions />
+            {renderSearchSuggestions()}
           </div>
         </div>
       )}

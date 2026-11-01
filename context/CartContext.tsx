@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -34,39 +35,235 @@ type CartContextType = {
   subtotal: number;
 };
 
+type AuthResponse = {
+  success?: boolean;
+  user?: {
+    id: string;
+    role: "customer" | "admin";
+  };
+};
+
 const CartContext = createContext<CartContextType | null>(null);
-const STORAGE_KEY = "henrys-store-cart";
+
+const ACTIVE_KEY = "henrys-store-cart";
+const GUEST_KEY = "henrys-store-guest-cart";
+const USER_KEY_PREFIX = "henrys-store-cart-user-";
+
+function getUserCartKey(userId: string) {
+  return `${USER_KEY_PREFIX}${userId}`;
+}
+
+function readCart(key: string): CartItem[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((item): item is CartItem => {
+      return (
+        item !== null &&
+        typeof item === "object" &&
+        typeof item.id === "string" &&
+        typeof item.name === "string" &&
+        typeof item.price === "number" &&
+        typeof item.quantity === "number" &&
+        Number.isFinite(item.price) &&
+        Number.isInteger(item.quantity) &&
+        item.quantity > 0
+      );
+    });
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
+}
+
+function mergeCarts(
+  savedCart: CartItem[],
+  guestCart: CartItem[]
+): CartItem[] {
+  const result = new Map<string, CartItem>();
+
+  for (const item of savedCart) {
+    result.set(item.id, { ...item });
+  }
+
+  for (const item of guestCart) {
+    const existing = result.get(item.id);
+
+    if (!existing) {
+      result.set(item.id, { ...item });
+    } else {
+      result.set(item.id, {
+        ...existing,
+        quantity: Math.min(
+          existing.quantity + item.quantity,
+          Math.max(existing.stock, item.stock)
+        ),
+      });
+    }
+  }
+
+  return Array.from(result.values());
+}
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
+  const itemsRef = useRef<CartItem[]>([]);
+  const userIdRef = useRef<string | null>(null);
+  const readyRef = useRef(false);
+  const syncQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const commitCart = useCallback(
+    (nextItems: CartItem[], userId = userIdRef.current) => {
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+
+      const storageKey = userId
+        ? getUserCartKey(userId)
+        : GUEST_KEY;
+
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify(nextItems)
+      );
+
+      localStorage.setItem(
+        ACTIVE_KEY,
+        JSON.stringify(nextItems)
+      );
+    },
+    []
+  );
+
+  const syncAuthentication = useCallback(async () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const response = await fetch("/api/auth/me", {
+        credentials: "include",
+        cache: "no-store",
+      });
 
-      if (saved) {
-        const parsed: unknown = JSON.parse(saved);
+      const data: AuthResponse = await response
+        .json()
+        .catch(() => ({}));
 
-        if (Array.isArray(parsed)) {
-          setItems(parsed as CartItem[]);
+      const authenticatedUser =
+        response.ok &&
+        data.success &&
+        data.user?.id &&
+        data.user.role === "customer"
+          ? data.user
+          : null;
+
+      const previousUserId = userIdRef.current;
+
+      if (!authenticatedUser) {
+        // Save the previous customer's cart before clearing
+        // the active bag after logout.
+        if (previousUserId) {
+          localStorage.setItem(
+            getUserCartKey(previousUserId),
+            JSON.stringify(itemsRef.current)
+          );
+        } else if (!readyRef.current) {
+          // Preserve an existing guest bag from the old cart key
+          // when migrating from the previous storage implementation.
+          const oldCart = readCart(ACTIVE_KEY);
+          const guestCart = readCart(GUEST_KEY);
+
+          if (guestCart.length === 0 && oldCart.length > 0) {
+            localStorage.setItem(
+              GUEST_KEY,
+              JSON.stringify(oldCart)
+            );
+          }
         }
+
+        userIdRef.current = null;
+        commitCart(readCart(GUEST_KEY), null);
+
+        return;
       }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
+
+      const nextUserId = authenticatedUser.id;
+
+      // No need to reload if the same customer is still signed in.
+      if (previousUserId === nextUserId) return;
+
+      // Save the previous account before switching accounts.
+      if (previousUserId) {
+        localStorage.setItem(
+          getUserCartKey(previousUserId),
+          JSON.stringify(itemsRef.current)
+        );
+      }
+
+      const savedUserCart = readCart(
+        getUserCartKey(nextUserId)
+      );
+
+      const guestCart = readCart(GUEST_KEY);
+
+      const restoredCart = mergeCarts(
+        savedUserCart,
+        guestCart
+      );
+
+      userIdRef.current = nextUserId;
+
+      localStorage.setItem(
+        getUserCartKey(nextUserId),
+        JSON.stringify(restoredCart)
+      );
+
+      localStorage.removeItem(GUEST_KEY);
+
+      commitCart(restoredCart, nextUserId);
+    } catch (error) {
+      console.error("Cart authentication sync failed:", error);
     } finally {
-      setReady(true);
+      if (!readyRef.current) {
+        readyRef.current = true;
+        setReady(true);
+      }
     }
-  }, []);
+  }, [commitCart]);
+
+  const queueAuthenticationSync = useCallback(() => {
+    syncQueueRef.current = syncQueueRef.current
+      .catch(() => undefined)
+      .then(syncAuthentication);
+  }, [syncAuthentication]);
 
   useEffect(() => {
-    if (ready) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    }
-  }, [items, ready]);
+    void queueAuthenticationSync();
+
+    const handleAuthChange = () => {
+      void queueAuthenticationSync();
+    };
+
+    window.addEventListener(
+      "henrys-auth-changed",
+      handleAuthChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "henrys-auth-changed",
+        handleAuthChange
+      );
+    };
+  }, [queueAuthenticationSync]);
 
   const addItem = useCallback(
-    (item: Omit<CartItem, "quantity">, quantity = 1): boolean => {
+    (
+      item: Omit<CartItem, "quantity">,
+      quantity = 1
+    ): boolean => {
       if (
         !item.id ||
         !Number.isFinite(item.price) ||
@@ -79,55 +276,73 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      let accepted = false;
+      const current = itemsRef.current;
 
-      setItems((current) => {
-        const existing = current.find((entry) => entry.id === item.id);
-        const nextQuantity = (existing?.quantity ?? 0) + quantity;
+      const existing = current.find(
+        (entry) => entry.id === item.id
+      );
 
-        if (nextQuantity > item.stock) {
-          return current;
-        }
+      const nextQuantity =
+        (existing?.quantity ?? 0) + quantity;
 
-        accepted = true;
+      if (nextQuantity > item.stock) return false;
 
-        if (existing) {
-          return current.map((entry) =>
+      const nextItems = existing
+        ? current.map((entry) =>
             entry.id === item.id
               ? { ...entry, ...item, quantity: nextQuantity }
               : entry
-          );
-        }
+          )
+        : [...current, { ...item, quantity }];
 
-        return [...current, { ...item, quantity }];
-      });
+      commitCart(nextItems);
 
-      return accepted;
+      return true;
     },
-    []
+    [commitCart]
   );
 
-  const updateQuantity = useCallback((id: string, quantity: number) => {
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      return;
-    }
+  const updateQuantity = useCallback(
+    (id: string, quantity: number) => {
+      if (!Number.isInteger(quantity) || quantity < 1) return;
 
-    setItems((current) =>
-      current.map((item) =>
+      const nextItems = itemsRef.current.map((item) =>
         item.id === id
-          ? { ...item, quantity: Math.min(quantity, item.stock) }
+          ? {
+              ...item,
+              quantity: Math.min(quantity, item.stock),
+            }
           : item
-      )
-    );
-  }, []);
+      );
 
-  const removeItem = useCallback((id: string) => {
-    setItems((current) => current.filter((item) => item.id !== id));
-  }, []);
+      commitCart(nextItems);
+    },
+    [commitCart]
+  );
+
+  const removeItem = useCallback(
+    (id: string) => {
+      const nextItems = itemsRef.current.filter(
+        (item) => item.id !== id
+      );
+
+      commitCart(nextItems);
+    },
+    [commitCart]
+  );
 
   const clearCart = useCallback(() => {
-    setItems([]);
-  }, []);
+    commitCart([]);
+
+    // Explicitly clear the current owner's saved bag too.
+    if (userIdRef.current) {
+      localStorage.removeItem(
+        getUserCartKey(userIdRef.current)
+      );
+    } else {
+      localStorage.removeItem(GUEST_KEY);
+    }
+  }, [commitCart]);
 
   const totalItems = items.reduce(
     (sum, item) => sum + item.quantity,

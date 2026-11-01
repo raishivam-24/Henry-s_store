@@ -36,6 +36,20 @@ yarn-error.log*
 # vercel
 .vercel
 
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local helper files
+audit-source-files.txt
+cart-diff.txt
+project-structure.txt

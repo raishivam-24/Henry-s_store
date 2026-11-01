@@ -86,8 +86,8 @@ function validateCatalog(products: CatalogProduct[]): void {
     if (product.isActive !== mustBeActive) {
       throw new Error(
         `Incorrect status for "${product.name}". ` +
-        `Website Status: "${product.websiteStatus ?? ""}". ` +
-        `Expected isActive=${mustBeActive}.`
+          `Website Status: "${product.websiteStatus ?? ""}". ` +
+          `Expected isActive=${mustBeActive}.`
       );
     }
   }
@@ -98,7 +98,7 @@ function validateCatalog(products: CatalogProduct[]): void {
   if (active !== 76 || inactive !== 14) {
     throw new Error(
       `Unexpected counts: ${active} active, ${inactive} inactive. ` +
-      "Expected 76 active and 14 DO NOT ADD products."
+        "Expected 76 active and 14 DO NOT ADD products."
     );
   }
 }
@@ -138,11 +138,13 @@ async function main(): Promise<void> {
 
   console.log("Catalog validation passed.");
   console.log(`Total products: ${products.length}`);
+
   console.log(
-    `Products to activate: ${products.filter((p) => p.isActive).length}`
+    `Products to activate: ${products.filter((product) => product.isActive).length}`
   );
+
   console.log(
-    `Products to deactivate: ${products.filter((p) => !p.isActive).length}`
+    `Products to deactivate: ${products.filter((product) => !product.isActive).length}`
   );
 
   await mongoose.connect(mongoUri);
@@ -156,8 +158,11 @@ async function main(): Promise<void> {
 
     const existingImages = new Set(
       existingProducts
-        .map((product: any) => product.image)
-        .filter(Boolean)
+        .map((product) => product.image)
+        .filter(
+          (image): image is string =>
+            typeof image === "string" && image.length > 0
+        )
     );
 
     const missingImages = products
@@ -167,8 +172,8 @@ async function main(): Promise<void> {
     if (missingImages.length > 0) {
       throw new Error(
         `Cannot find ${missingImages.length} matching MongoDB records:\n` +
-        missingImages.join("\n") +
-        "\nNo product updates were performed."
+          missingImages.join("\n") +
+          "\nNo product updates were performed."
       );
     }
 
