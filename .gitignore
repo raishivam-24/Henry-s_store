@@ -57,3 +57,5 @@ project-structure.txt
 # Database backups
 /dump/
 /dumps/
+
+/mongodb-backup/
