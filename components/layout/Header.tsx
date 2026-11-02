@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -10,6 +11,7 @@ import {
 
 import Image from "next/image";
 import Link from "next/link";
+import CartDrawer from "@/components/cart/CartDrawer";
 import { usePathname, useRouter } from "next/navigation";
 
 import {
@@ -54,6 +56,8 @@ export default function Header() {
   const pathname = usePathname();
 
   const { totalItems, ready } = useCart();
+
+  const [cartOpen, setCartOpen] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -279,7 +283,7 @@ export default function Header() {
     }
   }
 
-  // Render search suggestions without creating a nested component.
+  // Render search suggestions.
   function renderSearchSuggestions() {
     if (!showSuggestions) return null;
 
@@ -391,150 +395,55 @@ export default function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[#eeefe9] bg-white/95 shadow-sm backdrop-blur-xl">
-      <div className="mx-auto flex h-[78px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-10">
-        {/* Logo */}
-        <Link
-          href="/"
-          onClick={() => handleNavigationClick("/")}
-          className="shrink-0 text-xl font-black tracking-[-0.07em] text-[#171a17] sm:text-2xl"
-        >
-          HENRY&apos;S
-          <span className="text-[#238c78]">.</span>
-
-          <span className="ml-1 text-[9px] font-medium tracking-[0.18em] text-[#7f877e]">
-            SKINCARE
-          </span>
-        </Link>
-
-        {/* Desktop navigation */}
-        <nav className="hidden items-center gap-2 lg:flex">
-          {navigation.map(({ label, href, icon: Icon }) => {
-            const active = pathname === href;
-
-            return (
-              <Link
-                key={label}
-                href={href}
-                onClick={() => handleNavigationClick(href)}
-                className={`flex min-w-[76px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[11px] font-medium transition ${
-                  active
-                    ? "bg-[#f0f5ed] text-[#1e715d]"
-                    : "text-[#303630] hover:bg-[#f5f7f2] hover:text-[#287d6c]"
-                }`}
-              >
-                <Icon size={19} strokeWidth={1.8} />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Desktop search */}
-        <div
-          ref={desktopSearchRef}
-          className="relative hidden w-full max-w-[310px] md:block"
-        >
-          <form onSubmit={handleSearch} className="relative">
-            <Search
-              size={19}
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#788478]"
-            />
-
-            <input
-              value={searchQuery}
-              onChange={(event) => {
-                setSearchQuery(event.target.value);
-                setShowSuggestions(true);
-              }}
-              onFocus={() => setShowSuggestions(true)}
-              placeholder="Search products..."
-              aria-label="Search products"
-              autoComplete="off"
-              className="h-11 w-full rounded-full border border-[#e0e5dc] bg-[#fafbf8] pl-11 pr-10 text-sm text-[#27342b] outline-none ring-0 transition placeholder:text-[#9ba399] hover:border-[#bdcdbb] focus:border-[#398d7d] focus:outline-none focus:ring-4 focus:ring-[#398d7d]/10"
-            />
-
-            {searchQuery && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => {
-                  setSearchQuery("");
-                  setShowSuggestions(true);
-                }}
-                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#788478] hover:bg-[#e9eee7] focus:outline-none"
-              >
-                <X size={15} />
-              </button>
-            )}
-          </form>
-
-          {renderSearchSuggestions()}
-        </div>
-
-        {/* Account and cart */}
-        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+    <>
+      <header className="sticky top-0 z-50 border-b border-[#eeefe9] bg-white/95 shadow-sm backdrop-blur-xl">
+        <div className="mx-auto flex h-[78px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-10">
+          {/* Logo */}
           <Link
-            href="/account"
-            aria-label="My account"
-            className="hidden h-10 w-10 items-center justify-center rounded-full text-[#303630] hover:bg-[#f0f5ed] sm:flex"
+            href="/"
+            onClick={() => handleNavigationClick("/")}
+            className="shrink-0 text-xl font-black tracking-[-0.07em] text-[#171a17] sm:text-2xl"
           >
-            <UserRound size={21} strokeWidth={1.7} />
+            HENRY&apos;S
+            <span className="text-[#238c78]">.</span>
+
+            <span className="ml-1 text-[9px] font-medium tracking-[0.18em] text-[#7f877e]">
+              SKINCARE
+            </span>
           </Link>
 
-          <Link
-            href="/cart"
-            aria-label="Shopping bag"
-            className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#303630] hover:bg-[#f0f5ed]"
+          {/* Desktop navigation */}
+          <nav className="hidden items-center gap-2 lg:flex">
+            {navigation.map(({ label, href, icon: Icon }) => {
+              const active = pathname === href;
+
+              return (
+                <Link
+                  key={label}
+                  href={href}
+                  onClick={() => handleNavigationClick(href)}
+                  className={`flex min-w-[76px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[11px] font-medium transition ${
+                    active
+                      ? "bg-[#f0f5ed] text-[#1e715d]"
+                      : "text-[#303630] hover:bg-[#f5f7f2] hover:text-[#287d6c]"
+                  }`}
+                >
+                  <Icon size={19} strokeWidth={1.8} />
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Desktop search */}
+          <div
+            ref={desktopSearchRef}
+            className="relative hidden w-full max-w-[310px] md:block"
           >
-            <ShoppingBag size={21} strokeWidth={1.7} />
-
-            {ready && totalItems > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[#287d6c] px-1 text-[9px] font-bold text-white">
-                {totalItems > 99 ? "99+" : totalItems}
-              </span>
-            )}
-          </Link>
-
-          {/* Mobile search button */}
-          <button
-            type="button"
-            onClick={() => {
-              setMobileSearchOpen((previous) => !previous);
-              setShowSuggestions(false);
-            }}
-            aria-label="Toggle search"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-[#303630] hover:bg-[#f0f5ed] md:hidden"
-          >
-            {mobileSearchOpen ? <X size={20} /> : <Search size={20} />}
-          </button>
-
-          {/* Mobile menu */}
-          <button
-            type="button"
-            onClick={() => {
-              setMobileOpen((previous) => !previous);
-              setShowSuggestions(false);
-            }}
-            aria-label="Toggle navigation"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-[#303630] hover:bg-[#f0f5ed] lg:hidden"
-          >
-            {mobileOpen ? <X size={21} /> : <Menu size={21} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile search */}
-      {mobileSearchOpen && (
-        <div
-          ref={mobileSearchRef}
-          className="border-t border-[#edf0e9] bg-white px-4 py-4 md:hidden"
-        >
-          <div className="relative">
             <form onSubmit={handleSearch} className="relative">
               <Search
-                size={18}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#788478]"
+                size={19}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#788478]"
               />
 
               <input
@@ -547,7 +456,7 @@ export default function Header() {
                 placeholder="Search products..."
                 aria-label="Search products"
                 autoComplete="off"
-                className="h-12 w-full rounded-full border border-[#e0e5dc] bg-[#fafbf8] pl-11 pr-11 text-sm outline-none focus:border-[#398d7d] focus:ring-4 focus:ring-[#398d7d]/10"
+                className="h-11 w-full rounded-full border border-[#e0e5dc] bg-[#fafbf8] pl-11 pr-10 text-sm text-[#27342b] outline-none ring-0 transition placeholder:text-[#9ba399] hover:border-[#bdcdbb] focus:border-[#398d7d] focus:outline-none focus:ring-4 focus:ring-[#398d7d]/10"
               />
 
               {searchQuery && (
@@ -558,43 +467,149 @@ export default function Header() {
                     setSearchQuery("");
                     setShowSuggestions(true);
                   }}
-                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#788478] hover:bg-[#e9eee7]"
+                  className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#788478] hover:bg-[#e9eee7] focus:outline-none"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               )}
             </form>
 
             {renderSearchSuggestions()}
           </div>
-        </div>
-      )}
 
-      {/* Mobile navigation */}
-      {mobileOpen && (
-        <nav className="border-t border-[#edf0e9] bg-white px-4 py-3 lg:hidden">
-          {navigation.map(({ label, href, icon: Icon }) => (
+          {/* Account and cart */}
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <Link
-              key={label}
-              href={href}
-              onClick={() => handleNavigationClick(href)}
+              href="/account"
+              aria-label="My account"
+              className="hidden h-10 w-10 items-center justify-center rounded-full text-[#303630] hover:bg-[#f0f5ed] sm:flex"
+            >
+              <UserRound size={21} strokeWidth={1.7} />
+            </Link>
+
+            {/* Shopping cart button */}
+            <button
+              type="button"
+              onClick={() => setCartOpen(true)}
+              aria-label="Shopping bag"
+              aria-expanded={cartOpen}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#303630] hover:bg-[#f0f5ed]"
+            >
+              <ShoppingBag size={21} strokeWidth={1.7} />
+
+              {ready && totalItems > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[#287d6c] px-1 text-[9px] font-bold text-white">
+                  {totalItems > 99 ? "99+" : totalItems}
+                </span>
+              )}
+            </button>
+
+            {/* Mobile search button */}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileSearchOpen((previous) => !previous);
+                setShowSuggestions(false);
+              }}
+              aria-label="Toggle search"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-[#303630] hover:bg-[#f0f5ed] md:hidden"
+            >
+              {mobileSearchOpen ? <X size={20} /> : <Search size={20} />}
+            </button>
+
+            {/* Mobile menu */}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOpen((previous) => !previous);
+                setShowSuggestions(false);
+              }}
+              aria-label="Toggle navigation"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-[#303630] hover:bg-[#f0f5ed] lg:hidden"
+            >
+              {mobileOpen ? <X size={21} /> : <Menu size={21} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile search */}
+        {mobileSearchOpen && (
+          <div
+            ref={mobileSearchRef}
+            className="border-t border-[#edf0e9] bg-white px-4 py-4 md:hidden"
+          >
+            <div className="relative">
+              <form onSubmit={handleSearch} className="relative">
+                <Search
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#788478]"
+                />
+
+                <input
+                  value={searchQuery}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  placeholder="Search products..."
+                  aria-label="Search products"
+                  autoComplete="off"
+                  className="h-12 w-full rounded-full border border-[#e0e5dc] bg-[#fafbf8] pl-11 pr-11 text-sm outline-none focus:border-[#398d7d] focus:ring-4 focus:ring-[#398d7d]/10"
+                />
+
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setShowSuggestions(true);
+                    }}
+                    className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#788478] hover:bg-[#e9eee7]"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </form>
+
+              {renderSearchSuggestions()}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile navigation */}
+        {mobileOpen && (
+          <nav className="border-t border-[#edf0e9] bg-white px-4 py-3 lg:hidden">
+            {navigation.map(({ label, href, icon: Icon }) => (
+              <Link
+                key={label}
+                href={href}
+                onClick={() => handleNavigationClick(href)}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#39463c] hover:bg-[#f0f5ed]"
+              >
+                <Icon size={18} />
+                {label}
+              </Link>
+            ))}
+
+            <Link
+              href="/account"
+              onClick={() => handleNavigationClick("/account")}
               className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#39463c] hover:bg-[#f0f5ed]"
             >
-              <Icon size={18} />
-              {label}
+              <UserRound size={18} />
+              My Account
             </Link>
-          ))}
+          </nav>
+        )}
+      </header>
 
-          <Link
-            href="/account"
-            onClick={() => handleNavigationClick("/account")}
-            className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#39463c] hover:bg-[#f0f5ed]"
-          >
-            <UserRound size={18} />
-            My Account
-          </Link>
-        </nav>
-      )}
-    </header>
+      {/* Cart drawer - outside header for fixed positioning */}
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+      />
+    </>
   );
 }
