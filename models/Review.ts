@@ -102,10 +102,16 @@ const ReviewSchema = new Schema<IReview>(
   }
 );
 
-// Prevent one customer from reviewing the same product twice.
+// Prevent duplicate reviews from authenticated customers.
+// Legacy reviews without a user ObjectId are excluded.
 ReviewSchema.index(
   { user: 1, productId: 1 },
-  { unique: true }
+  {
+    unique: true,
+    partialFilterExpression: {
+      user: { $type: "objectId" },
+    },
+  }
 );
 
 // Optimize approved review queries.
