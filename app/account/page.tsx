@@ -33,21 +33,25 @@ type AuthUser = {
   role: "customer" | "admin";
 };
 
+
 type Order = {
   _id: string;
   orderNumber?: string;
   order_number?: string;
   total: number;
   status: string;
+  orderStatus?: string;
   createdAt?: string;
   created_at?: string;
   items?: {
+    name?: string;
     productName?: string;
     product_name?: string;
     image?: string;
     quantity?: number;
   }[];
 };
+
 
 export default function AccountPage() {
   const router = useRouter();
@@ -82,6 +86,41 @@ export default function AccountPage() {
 
         setUser(data.user);
 
+// Load real customer orders from MongoDB
+try {
+  const ordersResponse = await fetch("/api/orders", {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  const ordersData = await ordersResponse.json();
+
+  if (active && ordersResponse.ok && ordersData.success) {
+    const customerOrders: Order[] = Array.isArray(ordersData.orders)
+      ? ordersData.orders.map((order: Order) => ({
+          ...order,
+          status: order.orderStatus || order.status || "PLACED",
+        }))
+      : [];
+
+    setOrders(customerOrders);
+
+    // Calculate spending without cancelled orders
+    const spending = customerOrders
+      .filter((order) => order.status !== "CANCELLED")
+      .reduce(
+        (total, order) => total + Number(order.total || 0),
+        0
+      );
+
+    setTotalSpent(spending);
+  }
+} catch (orderError) {
+  console.error("Unable to load customer orders:", orderError);
+}
+
+
         // Read saved wishlist count if available.
         try {
           const wishlist = localStorage.getItem("henrys-store-wishlist");
@@ -97,8 +136,7 @@ export default function AccountPage() {
           setSavedItems(0);
         }
 
-        // Orders will be loaded when the customer orders endpoint is available.
-        // Do not display fabricated order records or totals.
+
       } catch {
         if (active) {
           setError("Unable to load your account. Please refresh.");
@@ -158,7 +196,7 @@ export default function AccountPage() {
   }
 
   
-if (!user) {
+if(!user) {
   return (
     <main className="relative isolate min-h-[650px] overflow-hidden bg-[#f2f5ec] px-4 py-10 sm:px-7 lg:flex lg:items-center lg:justify-center lg:px-10">
       {/* Background decoration */}
@@ -417,37 +455,58 @@ if (!user) {
 
             {/* Navigation */}
             <nav className="space-y-1.5">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
+              
+{menuItems.map((item) => {
+  const Icon = item.icon;
 
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className={`flex min-h-9 items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
-                      item.active
-                        ? "bg-gradient-to-r from-[#247744] to-[#318b50] text-white shadow-sm"
-                        : "text-[#263b32] hover:bg-[#f0f5ef]"
-                    }`}
-                  >
-                    <Icon size={15} />
+  const className = `flex min-h-9 items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
+    item.active
+      ? "bg-gradient-to-r from-[#247744] to-[#318b50] text-white shadow-sm"
+      : "text-[#263b32] hover:bg-[#f0f5ef]"
+  }`;
 
-                    <span className="flex-1">{item.label}</span>
+  if (item.label === "My Cart") {
+    return (
+      <button
+        key={item.label}
+        type="button"
+        onClick={() => {
+          window.dispatchEvent(new Event("henrys-open-cart"));
+        }}
+        className={`${className} w-full text-left`}
+      >
+        <Icon size={15} />
 
-                    {item.count !== undefined && item.count > 0 && (
-                      <span
-                        className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] ${
-                          item.active
-                            ? "bg-white text-[#247744]"
-                            : "bg-[#247744] text-white"
-                        }`}
-                      >
-                        {item.count}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+        <span className="flex-1">{item.label}</span>
+
+        {item.count !== undefined && item.count > 0 && (
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#247744] px-1 text-[10px] text-white">
+            {item.count}
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      key={item.label}
+      href={item.href}
+      className={className}
+    >
+      <Icon size={15} />
+
+      <span className="flex-1">{item.label}</span>
+
+      {item.count !== undefined && item.count > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#247744] px-1 text-[10px] text-white">
+          {item.count}
+        </span>
+      )}
+    </Link>
+  );
+})}
+
             </nav>
 
             {/* Logout */}
@@ -565,6 +624,15 @@ if (!user) {
                         <span className="rounded-full bg-[#e2f7e8] px-3 py-1.5 text-[10px] font-semibold capitalize text-[#247744]">
                           {order.status}
                         </span>
+
+<Link
+  href={`/orders/${order._id}`}
+  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#247744] hover:underline"
+>
+  Track
+  <ArrowRight size={12} />
+</Link>
+
 
                         <p className="text-xs font-bold text-[#20392e]">
                           ₹{Number(order.total || 0).toLocaleString("en-IN")}

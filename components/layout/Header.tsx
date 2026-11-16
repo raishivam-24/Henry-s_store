@@ -59,6 +59,19 @@ export default function Header() {
 
   const [cartOpen, setCartOpen] = useState(false);
 
+useEffect(() => {
+  function handleOpenCart() {
+    setCartOpen(true);
+  }
+
+  window.addEventListener("henrys-open-cart", handleOpenCart);
+
+  return () => {
+    window.removeEventListener("henrys-open-cart", handleOpenCart);
+  };
+}, []);
+
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
