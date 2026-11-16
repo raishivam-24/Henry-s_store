@@ -1,5 +1,7 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
+
 import { connectDB } from "@/lib/db";
 import Product from "@/models/Product";
 import Review from "@/models/Review";
@@ -8,6 +10,10 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 50;
+
+// Find active product using slug or MongoDB ObjectId.
 async function findProduct(id: string) {
   const conditions: Record<string, unknown>[] = [
     { slug: id.toLowerCase() },
@@ -23,100 +29,181 @@ async function findProduct(id: string) {
   }).select("_id name rating reviewCount");
 }
 
-function isValidCloudinaryImage(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > 1000) {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-
-    return (
-      url.protocol === "https:" &&
-      url.hostname === "res.cloudinary.com" &&
-      url.pathname.includes("/image/upload/")
-    );
-  } catch {
-    return false;
-  }
-}
-
-// GET: Only approved reviews are visible to customers.
+// GET: Fetch approved product reviews with pagination.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: RouteContext
 ) {
   try {
+    // 1. Connect to MongoDB
     await connectDB();
 
+    // 2. Get product ID or slug
     const { id } = await params;
+
+    if (!id || typeof id !== "string") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Product ID is required.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3. Find product
     const product = await findProduct(id);
 
     if (!product) {
       return NextResponse.json(
-        { success: false, message: "Product not found." },
+        {
+          success: false,
+          message: "Product not found.",
+        },
         { status: 404 }
       );
     }
 
-    const [reviews, summary] = await Promise.all([
-      Review.find({
-        productId: product._id,
-        status: "approved",
-      })
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .select("customerName rating title comment images createdAt")
-        .lean(),
+    // 4. Read pagination parameters
+    const searchParams = request.nextUrl.searchParams;
 
-      Review.aggregate([
-        {
-          $match: {
-            productId: product._id,
-            status: "approved",
-          },
-        },
-        {
-          $group: {
-            _id: "$rating",
-            count: { $sum: 1 },
-          },
-        },
-      ]),
-    ]);
-
-    const distribution = [1, 2, 3, 4, 5].map((rating) => ({
-      rating,
-      count:
-        summary.find((item) => item._id === rating)?.count ?? 0,
-    }));
-
-    const totalReviews = distribution.reduce(
-      (total, item) => total + item.count,
-      0
+    const requestedPage = Number(
+      searchParams.get("page") ?? 1
     );
 
+    const requestedLimit = Number(
+      searchParams.get("limit") ?? DEFAULT_LIMIT
+    );
+
+    // 5. Validate pagination values
+    if (
+      !Number.isInteger(requestedPage) ||
+      requestedPage < 1
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Page must be a positive integer.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !Number.isInteger(requestedLimit) ||
+      requestedLimit < 1
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Limit must be a positive integer.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const page = requestedPage;
+    const limit = Math.min(requestedLimit, MAX_LIMIT);
+    const skip = (page - 1) * limit;
+
+    // 6. Match only approved reviews for this product
+    const match = {
+  productId: product._id,
+  status: "approved" as const,
+};
+
+    // 7. Fetch reviews, total count and rating distribution
+    const [reviews, totalReviews, ratingStats] =
+      await Promise.all([
+        Review.find(match)
+          .sort({ createdAt: -1, _id: -1 })
+          .skip(skip)
+          .limit(limit)
+          .select(
+            "customerName rating title comment images isVerifiedPurchase createdAt"
+          )
+          .lean(),
+
+        Review.countDocuments(match),
+
+        Review.aggregate([
+          {
+            $match: match,
+          },
+          {
+            $group: {
+              _id: "$rating",
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+      ]);
+
+    // 8. Create complete 1–5 star distribution
+    const distribution = [1, 2, 3, 4, 5].map(
+      (rating) => {
+        const found = ratingStats.find(
+          (item: { _id: number; count: number }) =>
+            Number(item._id) === rating
+        );
+
+        return {
+          rating,
+          count: found?.count ?? 0,
+        };
+      }
+    );
+
+    // 9. Calculate average rating
     const ratingTotal = distribution.reduce(
-      (total, item) => total + item.rating * item.count,
+      (total, item) =>
+        total + item.rating * item.count,
       0
     );
 
     const averageRating =
       totalReviews > 0
-        ? Number((ratingTotal / totalReviews).toFixed(1))
+        ? Number(
+            (ratingTotal / totalReviews).toFixed(1)
+          )
         : 0;
 
+    // 10. Calculate pagination information
+    const totalPages = Math.ceil(totalReviews / limit);
+
+    const hasNextPage = page < totalPages;
+
+    const hasPreviousPage = page > 1 && totalPages > 0;
+
+    // 11. Send response
     return NextResponse.json(
       {
         success: true,
+
+        product: {
+          id: String(product._id),
+          name: product.name,
+        },
+
         reviews,
+
         summary: {
           averageRating,
           totalReviews,
           distribution,
         },
+
+        pagination: {
+          currentPage: page,
+          limit,
+          totalReviews,
+          totalPages,
+          hasNextPage,
+          hasPreviousPage,
+        },
       },
       {
+        status: 200,
         headers: {
           "Cache-Control": "no-store",
         },
@@ -126,125 +213,14 @@ export async function GET(
     console.error("Get product reviews error:", error);
 
     return NextResponse.json(
-      { success: false, message: "Could not fetch reviews." },
-      { status: 500 }
-    );
-  }
-}
-
-// POST: Customer submissions are pending until an admin approves them.
-export async function POST(
-  request: NextRequest,
-  { params }: RouteContext
-) {
-  try {
-    await connectDB();
-
-    const { id } = await params;
-    const product = await findProduct(id);
-
-    if (!product) {
-      return NextResponse.json(
-        { success: false, message: "Product not found." },
-        { status: 404 }
-      );
-    }
-
-    const body = await request.json();
-
-    const customerName =
-      typeof body.customerName === "string"
-        ? body.customerName.trim()
-        : "";
-
-    const title =
-      typeof body.title === "string" ? body.title.trim() : "";
-
-    const comment =
-      typeof body.comment === "string" ? body.comment.trim() : "";
-
-    const rating = Number(body.rating);
-
-    const images: unknown = body.images ?? [];
-
-    if (!customerName || !title || !comment || body.rating === undefined) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Name, rating, review title and comment are required.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (
-      customerName.length < 2 ||
-      customerName.length > 60 ||
-      title.length < 3 ||
-      title.length > 100 ||
-      comment.length < 10 ||
-      comment.length > 2000
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Please check the length of your name, title and review.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Rating must be a whole number from 1 to 5.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (
-      !Array.isArray(images) ||
-      images.length > 5 ||
-      !images.every(isValidCloudinaryImage)
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Please provide up to 5 valid Cloudinary image URLs.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const review = await Review.create({
-      productId: product._id,
-      customerName,
-      rating,
-      title,
-      comment,
-      images,
-      status: "pending",
-    });
-
-    return NextResponse.json(
       {
-        success: true,
-        message:
-          "Thank you! Your review has been submitted and is awaiting admin approval.",
-        reviewId: String(review._id),
-        status: review.status,
+        success: false,
+        message: "Could not fetch reviews.",
       },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error("Submit product review error:", error);
-
-    return NextResponse.json(
-      { success: false, message: "Could not submit your review." },
       { status: 500 }
     );
   }
 }
+
+// POST handler will be implemented in Phase 5.
+// Do not submit reviews through this endpoint until Phase 5 is complete.
