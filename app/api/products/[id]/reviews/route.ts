@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/db";
 import { requireCustomer } from "@/lib/auth";
 import Product from "@/models/Product";
 import Review from "@/models/Review";
+import Order from "@/models/Order";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -338,22 +339,40 @@ export async function POST(
         { status: 400 }
       );
     }
+// 9. Verify that the customer purchased and received this product.
+const deliveredOrder = await Order.findOne({
+  user: customer.id,
+  orderStatus: "DELIVERED",
+  "items.product": product._id,
+}).select("_id");
 
-    // 9. Prevent duplicate reviews.
-    const existingReview = await Review.findOne({
-      user: customer.id,
-      productId: product._id,
-    }).select("_id");
+if (!deliveredOrder) {
+  return NextResponse.json(
+    {
+      success: false,
+      message:
+        "You can review this product only after receiving it.",
+    },
+    { status: 403 }
+  );
+}
 
-    if (existingReview) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "You have already submitted a review for this product.",
-        },
-        { status: 409 }
-      );
-    }
+// 10. Prevent duplicate reviews.
+const existingReview = await Review.findOne({
+  user: customer.id,
+  productId: product._id,
+}).select("_id");
+
+if (existingReview) {
+  return NextResponse.json(
+    {
+      success: false,
+      message:
+        "You have already submitted a review for this product.",
+    },
+    { status: 409 }
+  );
+}
 
     // 10. Create review.
     // Customer identity is always taken from the authenticated session.
@@ -365,7 +384,7 @@ export async function POST(
       title,
       comment,
       images: [],
-      isVerifiedPurchase: false,
+      isVerifiedPurchase: true,
       status: "pending",
     });
 
